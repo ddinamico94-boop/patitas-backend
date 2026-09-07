@@ -11,6 +11,7 @@ const authRoutes = require('./routes/auth.routes');
 const reportsRoutes = require('./routes/reports.routes');
 const adminRoutes = require('./routes/admin.routes');
 const uploadsRoutes = require('./routes/uploads.routes');
+const conversationsRoutes = require('./routes/conversations.routes');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -32,6 +33,7 @@ app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/uploads', uploadsRoutes);
+app.use('/api/conversations', conversationsRoutes);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
@@ -41,4 +43,4 @@ app.use(errorHandler);
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
   console.log(`🐾 API de Patitas Tucumán corriendo en http://localhost:${PORT}`);
-});
+}); 
