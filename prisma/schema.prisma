@@ -41,6 +41,12 @@ model User {
 
   reports Report[]
 
+  // Conversaciones donde este usuario es quien hizo el reporte
+  conversationsAsReporter Conversation[] @relation("ReporterConversations")
+  // Conversaciones donde este usuario es quien quiere ayudar
+  conversationsAsHelper   Conversation[] @relation("HelperConversations")
+  messages                Message[]
+
   @@map("users")
 }
 
@@ -70,6 +76,8 @@ model Report {
   userId String?
   user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
 
+  conversations Conversation[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -87,4 +95,48 @@ model ReportImage {
   reportId String
 
   @@map("report_images")
+}
+
+// Un chat privado 1 a 1 por reporte: entre quien reportó y una persona
+// puntual que quiere ayudar. Cada persona interesada tiene su propia
+// conversación (no se mezclan entre sí).
+model Conversation {
+  id String @id @default(uuid())
+
+  reportId String
+  report   Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  reporterId String
+  reporter   User   @relation("ReporterConversations", fields: [reporterId], references: [id], onDelete: Cascade)
+
+  helperId String
+  helper   User   @relation("HelperConversations", fields: [helperId], references: [id], onDelete: Cascade)
+
+  messages Message[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Un mismo helper no puede tener 2 conversaciones para el mismo reporte
+  @@unique([reportId, helperId])
+  @@index([reporterId])
+  @@index([helperId])
+  @@map("conversations")
+}
+
+model Message {
+  id String @id @default(uuid())
+
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  senderId String
+  sender   User   @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  content String
+
+  createdAt DateTime @default(now())
+
+  @@index([conversationId])
+  @@map("messages")
 }

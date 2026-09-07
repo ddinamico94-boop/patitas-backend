@@ -46,7 +46,7 @@ async function register(req, res) {
     data: { name: data.name, email: data.email, phone: data.phone, passwordHash },
   });
 
-  const token = signToken({ sub: user.id, role: user.role });
+  const token = signToken({ sub: user.id, role: 'authenticated' });
   res.status(201).json({ user: toPublicUser(user), token });
 }
 
@@ -63,7 +63,7 @@ async function login(req, res) {
     return res.status(401).json({ error: 'Email o contraseña incorrectos.' });
   }
 
-  const token = signToken({ sub: user.id, role: user.role });
+  const token = signToken({ sub: user.id, role: 'authenticated' });
   res.json({ user: toPublicUser(user), token });
 }
 
@@ -112,7 +112,7 @@ async function googleLogin(req, res) {
     }
   }
 
-  const token = signToken({ sub: user.id, role: user.role });
+  const token = signToken({ sub: user.id, role: 'authenticated' });
   res.json({ user: toPublicUser(user), token });
 }
 
