@@ -1,5 +1,6 @@
 const { z } = require('zod');
 const prisma = require('../lib/prisma');
+const { getIO } = require('../lib/socket');
 
 const createConversationSchema = z.object({
   reportId: z.string().min(1, 'Falta el reporte'),
@@ -110,6 +111,10 @@ async function sendMessage(req, res) {
     where: { id: req.params.id },
     data: { updatedAt: new Date() },
   });
+
+  // Empuja el mensaje en tiempo real solo a quienes estén unidos a este
+  // room puntual (y solo pudieron unirse si son reporter o helper: ver socket.js)
+  getIO().to(`conversation:${req.params.id}`).emit('message:new', message);
 
   res.status(201).json({ message });
 }

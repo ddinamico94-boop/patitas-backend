@@ -1,6 +1,7 @@
 require('dotenv').config();
 require('express-async-errors');
 
+const http = require('http');
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -13,6 +14,7 @@ const adminRoutes = require('./routes/admin.routes');
 const uploadsRoutes = require('./routes/uploads.routes');
 const conversationsRoutes = require('./routes/conversations.routes');
 const errorHandler = require('./middleware/errorHandler');
+const { initSocket } = require('./lib/socket');
 
 const app = express();
 
@@ -40,7 +42,12 @@ app.get('/api/health', (_req, res) => res.json({ ok: true }));
 app.use((req, res) => res.status(404).json({ error: `Ruta no encontrada: ${req.method} ${req.path}` }));
 app.use(errorHandler);
 
+// Antes: app.listen(...). Ahora necesitamos el server HTTP "crudo" para
+// poder engancharle Socket.IO encima, en el mismo puerto.
+const server = http.createServer(app);
+initSocket(server);
+
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`🐾 API de Patitas Tucumán corriendo en http://localhost:${PORT}`);
-}); 
+});
