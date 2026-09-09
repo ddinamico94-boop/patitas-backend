@@ -42,16 +42,18 @@ async function create(req, res) {
     where: { reportId_helperId: { reportId, helperId: req.user.id } },
     include: conversationInclude,
   });
-  if (existing) return res.json({ conversation: existing });
+  if (existing) return res.json({ conversation: { ...existing, unreadCount: 0 } });
 
   const conversation = await prisma.conversation.create({
     data: { reportId, reporterId: report.userId, helperId: req.user.id },
     include: conversationInclude,
   });
-  res.status(201).json({ conversation });
+  res.status(201).json({ conversation: { ...conversation, unreadCount: 0 } });
 }
 
-// Lista las conversaciones del usuario actual (como reportero o como el que ayuda)
+// Lista las conversaciones del usuario actual (como reportero o como el que ayuda),
+// con la cantidad de mensajes no leídos de cada una (mensajes de la otra persona
+// posteriores a la última vez que este usuario la abrió).
 async function mine(req, res) {
   const conversations = await prisma.conversation.findMany({
     where: { OR: [{ reporterId: req.user.id }, { helperId: req.user.id }] },
@@ -61,7 +63,25 @@ async function mine(req, res) {
     },
     orderBy: { updatedAt: 'desc' },
   });
-  res.json({ items: conversations });
+
+  const withUnread = await Promise.all(
+    conversations.map(async (c) => {
+      const isReporter = c.reporterId === req.user.id;
+      const lastReadAt = isReporter ? c.reporterLastReadAt : c.helperLastReadAt;
+
+      const unreadCount = await prisma.message.count({
+        where: {
+          conversationId: c.id,
+          senderId: { not: req.user.id },
+          ...(lastReadAt ? { createdAt: { gt: lastReadAt } } : {}),
+        },
+      });
+
+      return { ...c, unreadCount };
+    })
+  );
+
+  res.json({ items: withUnread });
 }
 
 // Devuelve la conversación si existe y el usuario participa; false si no participa; null si no existe.
@@ -112,11 +132,35 @@ async function sendMessage(req, res) {
     data: { updatedAt: new Date() },
   });
 
-  // Empuja el mensaje en tiempo real solo a quienes estén unidos a este
-  // room puntual (y solo pudieron unirse si son reporter o helper: ver socket.js)
-  getIO().to(`conversation:${req.params.id}`).emit('message:new', message);
+  const io = getIO();
+
+  // A quien tenga esta conversación abierta ahora mismo (room de la conversación)
+  io.to(`conversation:${req.params.id}`).emit('message:new', message);
+
+  // A ambos participantes, tengan o no el chat abierto (room personal de cada
+  // usuario), para actualizar el contador de "no leídos" en la lista al instante.
+  io
+    .to(`user:${conversation.reporterId}`)
+    .to(`user:${conversation.helperId}`)
+    .emit('conversation:updated', { conversationId: req.params.id, message });
 
   res.status(201).json({ message });
 }
 
-module.exports = { create, mine, getById, listMessages, sendMessage };
+// Marca la conversación como leída hasta este momento, para el usuario actual.
+async function markRead(req, res) {
+  const conversation = await findIfParticipant(req.params.id, req.user.id);
+  if (conversation === null) return res.status(404).json({ error: 'Conversación no encontrada.' });
+  if (conversation === false) return res.status(403).json({ error: 'No tenés acceso a esta conversación.' });
+
+  const isReporter = conversation.reporterId === req.user.id;
+
+  await prisma.conversation.update({
+    where: { id: req.params.id },
+    data: isReporter ? { reporterLastReadAt: new Date() } : { helperLastReadAt: new Date() },
+  });
+
+  res.json({ ok: true });
+}
+
+module.exports = { create, mine, getById, listMessages, sendMessage, markRead };

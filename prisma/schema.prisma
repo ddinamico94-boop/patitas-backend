@@ -114,6 +114,12 @@ model Conversation {
 
   messages Message[]
 
+  // Hasta qué momento leyó cada uno de los dos participantes. Con esto
+  // calculamos el contador de "no leídos" tipo WhatsApp, por separado
+  // para cada persona (nunca se mezcla entre conversaciones ni usuarios).
+  reporterLastReadAt DateTime?
+  helperLastReadAt   DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

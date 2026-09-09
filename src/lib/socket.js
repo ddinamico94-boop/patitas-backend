@@ -37,6 +37,11 @@ function initSocket(httpServer) {
   });
 
   io.on('connection', (socket) => {
+    // Room personal del usuario: sirve para avisarle de novedades (mensajes
+    // nuevos en cualquier conversación suya, para el contador de "no leídos")
+    // sin necesidad de que tenga esa conversación puntual abierta.
+    socket.join(`user:${socket.user.id}`);
+
     // El cliente pide unirse a una conversación puntual; acá validamos que
     // realmente participe de ella antes de meterlo al room.
     socket.on('conversation:join', async (conversationId, ack) => {

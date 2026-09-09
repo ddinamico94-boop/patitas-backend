@@ -10,5 +10,6 @@ router.get('/mine', requireAuth, ctrl.mine); // antes de /:id para que no choque
 router.get('/:id', requireAuth, ctrl.getById);
 router.get('/:id/messages', requireAuth, ctrl.listMessages);
 router.post('/:id/messages', requireAuth, ctrl.sendMessage);
+router.patch('/:id/read', requireAuth, ctrl.markRead);
 
 module.exports = router;
