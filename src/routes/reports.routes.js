@@ -4,9 +4,16 @@ const { requireAuth, optionalAuth } = require('../middleware/auth');
 
 const router = Router();
 
-// Públicas (no requieren login para ver el mapa/listado, como en el Figma)
+// Públicas
 router.get('/', optionalAuth, ctrl.list);
-router.get('/mine', requireAuth, ctrl.myReports); // antes de /:id para que no choque la ruta
+
+// Sitemap dinámico
+router.get('/sitemap.xml', ctrl.sitemap);
+
+// Reportes del usuario logueado
+router.get('/mine', requireAuth, ctrl.myReports);
+
+// Reporte individual
 router.get('/:id', optionalAuth, ctrl.getById);
 
 // Requieren login

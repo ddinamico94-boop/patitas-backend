@@ -1,6 +1,9 @@
 require('dotenv').config();
 require('express-async-errors');
 
+const compression = require('compression');
+
+
 const http = require('http');
 const express = require('express');
 const cors = require('cors');
@@ -18,12 +21,29 @@ const { initSocket } = require('./lib/socket');
 
 const app = express();
 
+app.use(compression());
 app.use(helmet());
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
-app.use(express.json({ limit: '2mb' }));
+app.use(express.json({ limit: '1mb' }));
+
+
+
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:8443',
+  'https://www.patitastucuman.com',
+  'https://patitastucuman.com',
+];
+
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || '*',
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error('Origen no permitido por CORS'));
+    },
     credentials: true,
   })
 );
