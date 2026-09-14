@@ -10,8 +10,13 @@ router.get('/', optionalAuth, ctrl.list);
 // Sitemap dinámico
 router.get('/sitemap.xml', ctrl.sitemap);
 
+
+router.get('/share/:id', ctrl.sharePreview);
+
+
 // Reportes del usuario logueado
 router.get('/mine', requireAuth, ctrl.myReports);
+
 
 // Reporte individual
 router.get('/:id', optionalAuth, ctrl.getById);

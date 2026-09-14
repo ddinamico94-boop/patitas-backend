@@ -204,4 +204,147 @@ ${reportUrls}
   res.status(200).send(xml);
 }
 
-module.exports = { list, getById, create, update, remove, myReports, sitemap };
+
+
+function escapeHtml(value = '') {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+async function sharePreview(req, res) {
+  const report = await prisma.report.findUnique({
+    where: {
+      id: req.params.id,
+    },
+    include: reportInclude,
+  });
+
+  if (!report) {
+    return res.status(404).send('Reporte no encontrado');
+  }
+
+  const statusLabels = {
+    perdido: 'Perdido',
+    encontrado: 'Encontrado',
+    en_calle: 'En situación de calle',
+    ayudado: 'Ayudado',
+    rescatado: 'Rescatado',
+  };
+
+  const status =
+    statusLabels[report.status] || report.status;
+
+  const reportUrl =
+    `https://www.patitastucuman.com/reporte/${encodeURIComponent(report.id)}`;
+
+  const image =
+    report.images?.[0]?.url ||
+    'https://www.patitastucuman.com/og-image.png';
+
+  const title =
+    `${report.name} - ${status} en ${report.zone} | Patitas Tucumán`;
+
+  const description =
+    report.description ||
+    `${report.name} fue reportado como ${status.toLowerCase()} en ${report.zone}, Tucumán. Ayudanos a difundir.`;
+
+  const safeTitle = escapeHtml(title);
+  const safeDescription = escapeHtml(description);
+  const safeImage = escapeHtml(image);
+  const safeReportUrl = escapeHtml(reportUrl);
+
+  const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+
+  <title>${safeTitle}</title>
+
+  <meta
+    name="description"
+    content="${safeDescription}"
+  />
+
+  <link
+    rel="canonical"
+    href="${safeReportUrl}"
+  />
+
+  <meta
+    property="og:type"
+    content="article"
+  />
+
+  <meta
+    property="og:site_name"
+    content="Patitas Tucumán"
+  />
+
+  <meta
+    property="og:title"
+    content="${safeTitle}"
+  />
+
+  <meta
+    property="og:description"
+    content="${safeDescription}"
+  />
+
+  <meta
+    property="og:image"
+    content="${safeImage}"
+  />
+
+  <meta
+    property="og:url"
+    content="${safeReportUrl}"
+  />
+
+  <meta
+    name="twitter:card"
+    content="summary_large_image"
+  />
+
+  <meta
+    name="twitter:title"
+    content="${safeTitle}"
+  />
+
+  <meta
+    name="twitter:description"
+    content="${safeDescription}"
+  />
+
+  <meta
+    name="twitter:image"
+    content="${safeImage}"
+  />
+
+  <meta
+    http-equiv="refresh"
+    content="0;url=${safeReportUrl}"
+  />
+</head>
+
+<body>
+  <p>
+    Redirigiendo a
+    <a href="${safeReportUrl}">
+      ${safeTitle}
+    </a>
+  </p>
+</body>
+</html>`;
+
+  res
+    .status(200)
+    .set('Content-Type', 'text/html; charset=utf-8')
+    .send(html);
+}
+
+
+module.exports = { list, getById, create, update, remove, myReports, sitemap, sharePreview, };
