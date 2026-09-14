@@ -144,4 +144,64 @@ async function myReports(req, res) {
   res.json({ items });
 }
 
-module.exports = { list, getById, create, update, remove, myReports };
+async function sitemap(req, res) {
+  const reports = await prisma.report.findMany({
+    select: {
+      id: true,
+      createdAt: true,
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+  });
+
+  const baseUrl = 'https://www.patitastucuman.com';
+
+  const reportUrls = reports
+    .map(
+      (report) => `
+  <url>
+    <loc>${baseUrl}/reporte/${encodeURIComponent(report.id)}</loc>
+    <lastmod>${report.createdAt.toISOString()}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>`
+    )
+    .join('');
+
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+
+  <url>
+    <loc>${baseUrl}/</loc>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+
+  <url>
+    <loc>${baseUrl}/reportes</loc>
+    <changefreq>hourly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <url>
+    <loc>${baseUrl}/mapa</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <url>
+    <loc>${baseUrl}/crear-reporte</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+
+${reportUrls}
+
+</urlset>`;
+
+  res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+  res.status(200).send(xml);
+}
+
+module.exports = { list, getById, create, update, remove, myReports, sitemap };
