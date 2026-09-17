@@ -455,12 +455,12 @@ async function forgotPassword(
         from:
           process.env
             .EMAIL_FROM ||
-          'Patitas Tucumán <no-reply@patitastucuman.com>',
+          'Patitas Tucuman <no-reply@patitastucuman.com>',
 
         to: user.email,
 
         subject:
-          'Código para recuperar tu cuenta | Patitas Tucumán',
+          'Código para recuperar tu cuenta | Patitas Tucuman',
 
         html: `
 <!DOCTYPE html>
