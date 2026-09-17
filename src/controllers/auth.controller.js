@@ -7,98 +7,46 @@ const { Resend } = require('resend');
 const prisma = require('../lib/prisma');
 const { signToken } = require('../utils/jwt');
 
-const googleClient = new OAuth2Client(
-  process.env.GOOGLE_CLIENT_ID
-);
-
-const resend = new Resend(
-  process.env.RESEND_API_KEY
-);
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 // ======================================================
 // VALIDACIONES
 // ======================================================
 
 const registerSchema = z.object({
-  name: z
-    .string()
-    .min(2, 'El nombre es muy corto'),
-
-  email: z
-    .string()
-    .email('Email inválido'),
-
+  name: z.string().min(2, 'El nombre es muy corto'),
+  email: z.string().email('Email inválido'),
   password: z
     .string()
-    .min(
-      6,
-      'La contraseña debe tener al menos 6 caracteres'
-    ),
-
-  phone: z
-    .string()
-    .optional(),
+    .min(6, 'La contraseña debe tener al menos 6 caracteres'),
+  phone: z.string().optional(),
 });
 
 const loginSchema = z.object({
-  email: z
-    .string()
-    .email('Email inválido'),
-
-  password: z
-    .string()
-    .min(
-      1,
-      'La contraseña es obligatoria'
-    ),
+  email: z.string().email('Email inválido'),
+  password: z.string().min(1, 'La contraseña es obligatoria'),
 });
 
 const googleLoginSchema = z.object({
-  credential: z
-    .string()
-    .min(
-      1,
-      'Falta el token de Google'
-    ),
+  credential: z.string().min(1, 'Falta el token de Google'),
 });
 
 const forgotPasswordSchema = z.object({
-  email: z
-    .string()
-    .email('Email inválido'),
+  email: z.string().email('Email inválido'),
 });
 
 const verifyResetCodeSchema = z.object({
-  email: z
-    .string()
-    .email('Email inválido'),
-
-  code: z
-    .string()
-    .regex(
-      /^\d{6}$/,
-      'El código debe tener 6 dígitos'
-    ),
+  email: z.string().email('Email inválido'),
+  code: z.string().regex(/^\d{6}$/, 'El código debe tener 6 dígitos'),
 });
 
 const resetPasswordSchema = z.object({
-  email: z
-    .string()
-    .email('Email inválido'),
-
-  code: z
-    .string()
-    .regex(
-      /^\d{6}$/,
-      'El código debe tener 6 dígitos'
-    ),
-
+  email: z.string().email('Email inválido'),
+  code: z.string().regex(/^\d{6}$/, 'El código debe tener 6 dígitos'),
   password: z
     .string()
-    .min(
-      6,
-      'La contraseña debe tener al menos 6 caracteres'
-    ),
+    .min(6, 'La contraseña debe tener al menos 6 caracteres'),
 });
 
 // ======================================================
@@ -123,36 +71,17 @@ function hashResetCode(code) {
     .digest('hex');
 }
 
-function resetCodeMatches(
-  storedCodeHash,
-  code
-) {
-  const receivedCodeHash =
-    hashResetCode(code);
+function resetCodeMatches(storedCodeHash, code) {
+  const receivedCodeHash = hashResetCode(code);
 
-  const storedHash =
-    Buffer.from(
-      storedCodeHash,
-      'hex'
-    );
+  const storedHash = Buffer.from(storedCodeHash, 'hex');
+  const receivedHash = Buffer.from(receivedCodeHash, 'hex');
 
-  const receivedHash =
-    Buffer.from(
-      receivedCodeHash,
-      'hex'
-    );
-
-  if (
-    storedHash.length !==
-    receivedHash.length
-  ) {
+  if (storedHash.length !== receivedHash.length) {
     return false;
   }
 
-  return crypto.timingSafeEqual(
-    storedHash,
-    receivedHash
-  );
+  return crypto.timingSafeEqual(storedHash, receivedHash);
 }
 
 // ======================================================
@@ -160,43 +89,32 @@ function resetCodeMatches(
 // ======================================================
 
 async function register(req, res) {
-  const data =
-    registerSchema.parse(req.body);
+  const data = registerSchema.parse(req.body);
 
-  const normalizedEmail =
-    data.email
-      .trim()
-      .toLowerCase();
+  const normalizedEmail = data.email.trim().toLowerCase();
 
-  const existing =
-    await prisma.user.findUnique({
-      where: {
-        email: normalizedEmail,
-      },
-    });
+  const existing = await prisma.user.findUnique({
+    where: {
+      email: normalizedEmail,
+    },
+  });
 
   if (existing) {
     return res.status(409).json({
-      error:
-        'Ya existe una cuenta con ese email.',
+      error: 'Ya existe una cuenta con ese email.',
     });
   }
 
-  const passwordHash =
-    await bcrypt.hash(
-      data.password,
-      10
-    );
+  const passwordHash = await bcrypt.hash(data.password, 10);
 
-  const user =
-    await prisma.user.create({
-      data: {
-        name: data.name,
-        email: normalizedEmail,
-        phone: data.phone,
-        passwordHash,
-      },
-    });
+  const user = await prisma.user.create({
+    data: {
+      name: data.name,
+      email: normalizedEmail,
+      phone: data.phone,
+      passwordHash,
+    },
+  });
 
   const token = signToken({
     sub: user.id,
@@ -214,41 +132,30 @@ async function register(req, res) {
 // ======================================================
 
 async function login(req, res) {
-  const data =
-    loginSchema.parse(req.body);
+  const data = loginSchema.parse(req.body);
 
-  const normalizedEmail =
-    data.email
-      .trim()
-      .toLowerCase();
+  const normalizedEmail = data.email.trim().toLowerCase();
 
-  const user =
-    await prisma.user.findUnique({
-      where: {
-        email: normalizedEmail,
-      },
-    });
+  const user = await prisma.user.findUnique({
+    where: {
+      email: normalizedEmail,
+    },
+  });
 
-  if (
-    !user ||
-    !user.passwordHash
-  ) {
+  if (!user || !user.passwordHash) {
     return res.status(401).json({
-      error:
-        'Email o contraseña incorrectos.',
+      error: 'Email o contraseña incorrectos.',
     });
   }
 
-  const valid =
-    await bcrypt.compare(
-      data.password,
-      user.passwordHash
-    );
+  const valid = await bcrypt.compare(
+    data.password,
+    user.passwordHash
+  );
 
   if (!valid) {
     return res.status(401).json({
-      error:
-        'Email o contraseña incorrectos.',
+      error: 'Email o contraseña incorrectos.',
     });
   }
 
@@ -267,34 +174,21 @@ async function login(req, res) {
 // GOOGLE LOGIN
 // ======================================================
 
-async function googleLogin(
-  req,
-  res
-) {
-  const {
-    credential,
-  } =
-    googleLoginSchema.parse(
-      req.body
-    );
+async function googleLogin(req, res) {
+  const { credential } = googleLoginSchema.parse(req.body);
 
   let payload;
 
   try {
-    const ticket =
-      await googleClient.verifyIdToken({
-        idToken: credential,
-        audience:
-          process.env
-            .GOOGLE_CLIENT_ID,
-      });
+    const ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
 
-    payload =
-      ticket.getPayload();
+    payload = ticket.getPayload();
   } catch (error) {
     return res.status(401).json({
-      error:
-        'Token de Google inválido.',
+      error: 'Token de Google inválido.',
     });
   }
 
@@ -312,60 +206,42 @@ async function googleLogin(
     });
   }
 
-  const normalizedEmail =
-    email
-      .trim()
-      .toLowerCase();
+  const normalizedEmail = email.trim().toLowerCase();
 
-  let user =
-    await prisma.user.findUnique({
+  let user = await prisma.user.findUnique({
+    where: {
+      googleId,
+    },
+  });
+
+  if (!user) {
+    user = await prisma.user.findUnique({
       where: {
-        googleId,
+        email: normalizedEmail,
       },
     });
 
-  if (!user) {
-    user =
-      await prisma.user.findUnique({
+    if (user) {
+      user = await prisma.user.update({
         where: {
-          email:
-            normalizedEmail,
+          id: user.id,
+        },
+        data: {
+          googleId,
+          avatarUrl: user.avatarUrl || picture,
         },
       });
-
-    if (user) {
-      user =
-        await prisma.user.update({
-          where: {
-            id: user.id,
-          },
-
-          data: {
-            googleId,
-
-            avatarUrl:
-              user.avatarUrl ||
-              picture,
-          },
-        });
     } else {
-      user =
-        await prisma.user.create({
-          data: {
-            name:
-              name ||
-              normalizedEmail
-                .split('@')[0],
-
-            email:
-              normalizedEmail,
-
-            googleId,
-
-            avatarUrl:
-              picture,
-          },
-        });
+      user = await prisma.user.create({
+        data: {
+          name:
+            name ||
+            normalizedEmail.split('@')[0],
+          email: normalizedEmail,
+          googleId,
+          avatarUrl: picture,
+        },
+      });
     }
   }
 
@@ -385,17 +261,15 @@ async function googleLogin(
 // ======================================================
 
 async function me(req, res) {
-  const user =
-    await prisma.user.findUnique({
-      where: {
-        id: req.user.id,
-      },
-    });
+  const user = await prisma.user.findUnique({
+    where: {
+      id: req.user.id,
+    },
+  });
 
   if (!user) {
     return res.status(404).json({
-      error:
-        'Usuario no encontrado.',
+      error: 'Usuario no encontrado.',
     });
   }
 
@@ -408,100 +282,69 @@ async function me(req, res) {
 // OLVIDÉ MI CONTRASEÑA
 // ======================================================
 
-async function forgotPassword(
-  req,
-  res
-) {
-  const {
-    email,
-  } =
-    forgotPasswordSchema.parse(
-      req.body
-    );
+async function forgotPassword(req, res) {
+  const { email } = forgotPasswordSchema.parse(req.body);
 
-  const normalizedEmail =
-    email
-      .trim()
-      .toLowerCase();
+  const normalizedEmail = email.trim().toLowerCase();
 
   const genericMessage =
     'Si existe una cuenta con ese email, recibirás un código de recuperación.';
 
-  const user =
-    await prisma.user.findUnique({
-      where: {
-        email:
-          normalizedEmail,
-      },
-    });
+  const user = await prisma.user.findUnique({
+    where: {
+      email: normalizedEmail,
+    },
+  });
 
   // No revelamos si existe una cuenta.
   if (!user) {
     return res.json({
-      message:
-        genericMessage,
+      message: genericMessage,
     });
   }
 
-  // Una cuenta exclusivamente de Google
-  // no tiene contraseña que recuperar.
-  if (
-    !user.passwordHash &&
-    user.googleId
-  ) {
+  // Si la cuenta solamente utiliza Google,
+  // no tiene contraseña local para recuperar.
+  if (!user.passwordHash && user.googleId) {
     return res.json({
-      message:
-        genericMessage,
+      message: genericMessage,
     });
   }
 
-  const code =
-    crypto
-      .randomInt(
-        100000,
-        1000000
-      )
-      .toString();
+  // Código de 6 dígitos.
+  const code = crypto
+    .randomInt(100000, 1000000)
+    .toString();
 
-  const codeHash =
-    hashResetCode(code);
+  const codeHash = hashResetCode(code);
 
-  const expiresAt =
-    new Date(
-      Date.now() +
-        10 * 60 * 1000
-    );
+  // El código dura 10 minutos.
+  const expiresAt = new Date(
+    Date.now() + 10 * 60 * 1000
+  );
 
   await prisma.user.update({
     where: {
       id: user.id,
     },
-
     data: {
-      resetPasswordCodeHash:
-        codeHash,
-
-      resetPasswordExpiresAt:
-        expiresAt,
+      resetPasswordCodeHash: codeHash,
+      resetPasswordExpiresAt: expiresAt,
     },
   });
 
   try {
-    const {
-      error,
-    } =
-      await resend.emails.send({
-        from:
-          process.env
-            .EMAIL_FROM ||
-          'no-reply@patitastucuman.com',
+    const { error } = await resend.emails.send({
+      from:
+        process.env.EMAIL_FROM ||
+        'no-reply@patitastucuman.com',
 
-        to: user.email,
+      to: user.email,
 
-        subject:
-          'Código para recuperar tu cuenta | Patitas Tucuman',
+      subject:
+        'Código para recuperar tu cuenta | Patitas Tucumán',
 
-        html: `
+      html: `
 <!DOCTYPE html>
 <html lang="es">
 
@@ -513,18 +356,16 @@ async function forgotPassword(
     content="width=device-width, initial-scale=1.0"
   />
 
-  <title>
-    Recuperar contraseña
-  </title>
+  <title>Recuperar contraseña</title>
 </head>
 
 <body
   style="
     margin: 0;
     padding: 0;
-    background-color: #f7f4ef;
+    background-color: #FAF8F4;
     font-family: Arial, Helvetica, sans-serif;
-    color: #2f2a27;
+    color: #1C1917;
   "
 >
 
@@ -541,25 +382,86 @@ async function forgotPassword(
         background-color: #ffffff;
         border-radius: 18px;
         padding: 36px;
-        border: 1px solid #ebe5df;
+        border: 1px solid #E0D6CC;
       "
     >
 
-      <div
+      <!-- ============================================ -->
+      <!-- LOGO -->
+      <!-- ============================================ -->
+
+      <table
+        role="presentation"
+        cellpadding="0"
+        cellspacing="0"
+        border="0"
         style="
-          font-size: 24px;
-          font-weight: 700;
-          margin-bottom: 28px;
+          margin: 0 0 28px 0;
+          border-collapse: collapse;
         "
       >
-        🐾 Patitas Tucumán
-      </div>
+        <tr>
+
+          <!-- Huellita -->
+          <td
+            style="
+              vertical-align: middle;
+              padding: 0 10px 0 0;
+            "
+          >
+            <img
+              src="https://www.patitastucuman.com/favicon.svg"
+              width="36"
+              height="36"
+              alt=""
+              style="
+                display: block;
+                width: 36px;
+                height: 36px;
+                border: 0;
+                outline: none;
+              "
+            />
+          </td>
+
+          <!-- Patitas Tucumán -->
+          <td
+            style="
+              vertical-align: middle;
+              padding: 0;
+            "
+          >
+            <img
+              src="https://www.patitastucuman.com/logo-texto.png"
+              width="205"
+              alt="Patitas Tucumán"
+              style="
+                display: block;
+                width: 205px;
+                max-width: 100%;
+                height: auto;
+                border: 0;
+                outline: none;
+                text-decoration: none;
+              "
+            />
+          </td>
+
+        </tr>
+      </table>
+
+      <!-- ============================================ -->
+      <!-- CONTENIDO -->
+      <!-- ============================================ -->
 
       <h1
         style="
+          font-family: Georgia, serif;
           font-size: 24px;
+          font-weight: 600;
+          line-height: 1.3;
           margin: 0 0 16px;
-          color: #2f2a27;
+          color: #1C1917;
         "
       >
         Recuperá tu contraseña
@@ -567,6 +469,7 @@ async function forgotPassword(
 
       <p
         style="
+          margin: 0 0 14px;
           font-size: 15px;
           line-height: 1.6;
           color: #6d625c;
@@ -577,88 +480,95 @@ async function forgotPassword(
 
       <p
         style="
+          margin: 0 0 14px;
           font-size: 15px;
           line-height: 1.6;
           color: #6d625c;
         "
       >
-        Recibimos una solicitud para
-        cambiar la contraseña de tu
-        cuenta de Patitas Tucumán.
+        Recibimos una solicitud para cambiar la contraseña
+        de tu cuenta de Patitas Tucumán.
       </p>
 
       <p
         style="
+          margin: 0;
           font-size: 15px;
           line-height: 1.6;
           color: #6d625c;
         "
       >
-        Ingresá el siguiente código
-        en la página:
+        Ingresá el siguiente código en la página:
       </p>
+
+      <!-- ============================================ -->
+      <!-- CÓDIGO -->
+      <!-- ============================================ -->
 
       <div
         style="
           margin: 28px 0;
           padding: 22px 15px;
-          background-color: #f7f4ef;
+          background-color: #FAF8F4;
+          border: 1px solid #E0D6CC;
           border-radius: 12px;
           text-align: center;
         "
       >
-
         <span
           style="
+            font-family: Arial, Helvetica, sans-serif;
             font-size: 34px;
+            line-height: 42px;
             font-weight: 700;
             letter-spacing: 8px;
-            color: #2f2a27;
+            color: #1C1917;
           "
         >
           ${code}
         </span>
-
       </div>
 
       <p
         style="
+          margin: 0;
           font-size: 14px;
           line-height: 1.6;
           color: #6d625c;
         "
       >
         Este código vence en
-        <strong>
-          10 minutos
-        </strong>.
+        <strong>10 minutos</strong>.
       </p>
 
       <p
         style="
+          margin: 28px 0 0;
           font-size: 13px;
           line-height: 1.6;
           color: #968a83;
-          margin-top: 28px;
         "
       >
-        Si no solicitaste cambiar
-        tu contraseña, podés ignorar
-        este correo.
+        Si no solicitaste cambiar tu contraseña,
+        podés ignorar este correo.
       </p>
 
     </div>
+
+    <!-- ============================================ -->
+    <!-- FOOTER -->
+    <!-- ============================================ -->
 
     <p
       style="
         text-align: center;
         font-size: 12px;
-        color: #a0958e;
-        margin-top: 20px;
+        line-height: 1.5;
+        color: #9C8A82;
+        margin: 20px 0 0;
       "
     >
-      Patitas Tucumán · Tucumán,
-      Argentina
+      Patitas Tucumán · Tucumán, Argentina
     </p>
 
   </div>
@@ -666,8 +576,8 @@ async function forgotPassword(
 </body>
 
 </html>
-        `,
-      });
+      `,
+    });
 
     if (error) {
       console.error(
@@ -679,22 +589,16 @@ async function forgotPassword(
         where: {
           id: user.id,
         },
-
         data: {
-          resetPasswordCodeHash:
-            null,
-
-          resetPasswordExpiresAt:
-            null,
+          resetPasswordCodeHash: null,
+          resetPasswordExpiresAt: null,
         },
       });
 
-      return res
-        .status(500)
-        .json({
-          error:
-            'No pudimos enviar el código. Intentá nuevamente.',
-        });
+      return res.status(500).json({
+        error:
+          'No pudimos enviar el código. Intentá nuevamente.',
+      });
     }
   } catch (error) {
     console.error(
@@ -706,27 +610,20 @@ async function forgotPassword(
       where: {
         id: user.id,
       },
-
       data: {
-        resetPasswordCodeHash:
-          null,
-
-        resetPasswordExpiresAt:
-          null,
+        resetPasswordCodeHash: null,
+        resetPasswordExpiresAt: null,
       },
     });
 
-    return res
-      .status(500)
-      .json({
-        error:
-          'No pudimos enviar el código. Intentá nuevamente.',
-      });
+    return res.status(500).json({
+      error:
+        'No pudimos enviar el código. Intentá nuevamente.',
+    });
   }
 
   return res.json({
-    message:
-      genericMessage,
+    message: genericMessage,
   });
 }
 
@@ -734,30 +631,19 @@ async function forgotPassword(
 // VERIFICAR CÓDIGO
 // ======================================================
 
-async function verifyResetCode(
-  req,
-  res
-) {
+async function verifyResetCode(req, res) {
   const {
     email,
     code,
-  } =
-    verifyResetCodeSchema.parse(
-      req.body
-    );
+  } = verifyResetCodeSchema.parse(req.body);
 
-  const normalizedEmail =
-    email
-      .trim()
-      .toLowerCase();
+  const normalizedEmail = email.trim().toLowerCase();
 
-  const user =
-    await prisma.user.findUnique({
-      where: {
-        email:
-          normalizedEmail,
-      },
-    });
+  const user = await prisma.user.findUnique({
+    where: {
+      email: normalizedEmail,
+    },
+  });
 
   if (
     !user ||
@@ -765,51 +651,39 @@ async function verifyResetCode(
     !user.resetPasswordExpiresAt
   ) {
     return res.status(400).json({
-      error:
-        'El código es inválido o expiró.',
+      error: 'El código es inválido o expiró.',
     });
   }
 
-  if (
-    new Date() >
-    user.resetPasswordExpiresAt
-  ) {
+  if (new Date() > user.resetPasswordExpiresAt) {
     await prisma.user.update({
       where: {
         id: user.id,
       },
-
       data: {
-        resetPasswordCodeHash:
-          null,
-
-        resetPasswordExpiresAt:
-          null,
+        resetPasswordCodeHash: null,
+        resetPasswordExpiresAt: null,
       },
     });
 
     return res.status(400).json({
-      error:
-        'El código es inválido o expiró.',
+      error: 'El código es inválido o expiró.',
     });
   }
 
-  const valid =
-    resetCodeMatches(
-      user.resetPasswordCodeHash,
-      code
-    );
+  const valid = resetCodeMatches(
+    user.resetPasswordCodeHash,
+    code
+  );
 
   if (!valid) {
     return res.status(400).json({
-      error:
-        'El código es inválido o expiró.',
+      error: 'El código es inválido o expiró.',
     });
   }
 
   return res.json({
-    message:
-      'Código verificado correctamente.',
+    message: 'Código verificado correctamente.',
   });
 }
 
@@ -817,31 +691,20 @@ async function verifyResetCode(
 // CAMBIAR CONTRASEÑA
 // ======================================================
 
-async function resetPassword(
-  req,
-  res
-) {
+async function resetPassword(req, res) {
   const {
     email,
     code,
     password,
-  } =
-    resetPasswordSchema.parse(
-      req.body
-    );
+  } = resetPasswordSchema.parse(req.body);
 
-  const normalizedEmail =
-    email
-      .trim()
-      .toLowerCase();
+  const normalizedEmail = email.trim().toLowerCase();
 
-  const user =
-    await prisma.user.findUnique({
-      where: {
-        email:
-          normalizedEmail,
-      },
-    });
+  const user = await prisma.user.findUnique({
+    where: {
+      email: normalizedEmail,
+    },
+  });
 
   if (
     !user ||
@@ -849,79 +712,55 @@ async function resetPassword(
     !user.resetPasswordExpiresAt
   ) {
     return res.status(400).json({
-      error:
-        'El código es inválido o expiró.',
+      error: 'El código es inválido o expiró.',
     });
   }
 
-  // Verificar vencimiento.
-  if (
-    new Date() >
-    user.resetPasswordExpiresAt
-  ) {
+  if (new Date() > user.resetPasswordExpiresAt) {
     await prisma.user.update({
       where: {
         id: user.id,
       },
-
       data: {
-        resetPasswordCodeHash:
-          null,
-
-        resetPasswordExpiresAt:
-          null,
+        resetPasswordCodeHash: null,
+        resetPasswordExpiresAt: null,
       },
     });
 
     return res.status(400).json({
-      error:
-        'El código es inválido o expiró.',
+      error: 'El código es inválido o expiró.',
     });
   }
 
-  // Volvemos a verificar el código.
-  const valid =
-    resetCodeMatches(
-      user.resetPasswordCodeHash,
-      code
-    );
+  const valid = resetCodeMatches(
+    user.resetPasswordCodeHash,
+    code
+  );
 
   if (!valid) {
     return res.status(400).json({
-      error:
-        'El código es inválido o expiró.',
+      error: 'El código es inválido o expiró.',
     });
   }
 
-  // Crear hash de la nueva contraseña.
-  const newPasswordHash =
-    await bcrypt.hash(
-      password,
-      10
-    );
+  const newPasswordHash = await bcrypt.hash(
+    password,
+    10
+  );
 
-  // Guardar contraseña nueva e invalidar
-  // inmediatamente el código utilizado.
   await prisma.user.update({
     where: {
       id: user.id,
     },
-
     data: {
-      passwordHash:
-        newPasswordHash,
-
-      resetPasswordCodeHash:
-        null,
-
-      resetPasswordExpiresAt:
-        null,
+      passwordHash: newPasswordHash,
+      resetPasswordCodeHash: null,
+      resetPasswordExpiresAt: null,
     },
   });
 
   return res.json({
-    message:
-      'Contraseña actualizada correctamente.',
+    message: 'Contraseña actualizada correctamente.',
   });
 }
 
