@@ -81,8 +81,28 @@ const verifyResetCodeSchema = z.object({
     ),
 });
 
+const resetPasswordSchema = z.object({
+  email: z
+    .string()
+    .email('Email inválido'),
+
+  code: z
+    .string()
+    .regex(
+      /^\d{6}$/,
+      'El código debe tener 6 dígitos'
+    ),
+
+  password: z
+    .string()
+    .min(
+      6,
+      'La contraseña debe tener al menos 6 caracteres'
+    ),
+});
+
 // ======================================================
-// USUARIO PÚBLICO
+// FUNCIONES AUXILIARES
 // ======================================================
 
 function toPublicUser(user) {
@@ -94,6 +114,45 @@ function toPublicUser(user) {
     role: user.role,
     avatarUrl: user.avatarUrl,
   };
+}
+
+function hashResetCode(code) {
+  return crypto
+    .createHash('sha256')
+    .update(code)
+    .digest('hex');
+}
+
+function resetCodeMatches(
+  storedCodeHash,
+  code
+) {
+  const receivedCodeHash =
+    hashResetCode(code);
+
+  const storedHash =
+    Buffer.from(
+      storedCodeHash,
+      'hex'
+    );
+
+  const receivedHash =
+    Buffer.from(
+      receivedCodeHash,
+      'hex'
+    );
+
+  if (
+    storedHash.length !==
+    receivedHash.length
+  ) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(
+    storedHash,
+    receivedHash
+  );
 }
 
 // ======================================================
@@ -151,7 +210,7 @@ async function register(req, res) {
 }
 
 // ======================================================
-// LOGIN EMAIL + CONTRASEÑA
+// LOGIN
 // ======================================================
 
 async function login(req, res) {
@@ -174,6 +233,16 @@ async function login(req, res) {
     !user ||
     !user.passwordHash
   ) {
+    console.log(
+      'LOGIN DEBUG - usuario encontrado:',
+      !!user
+    );
+
+    console.log(
+      'LOGIN DEBUG - tiene passwordHash:',
+      !!user?.passwordHash
+    );
+
     return res.status(401).json({
       error:
         'Email o contraseña incorrectos.',
@@ -185,6 +254,23 @@ async function login(req, res) {
       data.password,
       user.passwordHash
     );
+
+  // DEBUG TEMPORAL.
+  // No mostramos contraseña ni hash.
+  console.log(
+    'LOGIN DEBUG - email:',
+    normalizedEmail
+  );
+
+  console.log(
+    'LOGIN DEBUG - user id:',
+    user.id
+  );
+
+  console.log(
+    'LOGIN DEBUG - bcrypt compare:',
+    valid
+  );
 
   if (!valid) {
     return res.status(401).json({
@@ -208,7 +294,10 @@ async function login(req, res) {
 // GOOGLE LOGIN
 // ======================================================
 
-async function googleLogin(req, res) {
+async function googleLogin(
+  req,
+  res
+) {
   const {
     credential,
   } =
@@ -229,7 +318,7 @@ async function googleLogin(req, res) {
 
     payload =
       ticket.getPayload();
-  } catch (err) {
+  } catch (error) {
     return res.status(401).json({
       error:
         'Token de Google inválido.',
@@ -346,7 +435,10 @@ async function me(req, res) {
 // OLVIDÉ MI CONTRASEÑA
 // ======================================================
 
-async function forgotPassword(req, res) {
+async function forgotPassword(
+  req,
+  res
+) {
   const {
     email,
   } =
@@ -378,8 +470,8 @@ async function forgotPassword(req, res) {
     });
   }
 
-  // Si la cuenta solamente usa Google,
-  // no enviamos recuperación.
+  // Las cuentas exclusivamente de Google
+  // no tienen contraseña que recuperar.
   if (
     !user.passwordHash &&
     user.googleId
@@ -390,10 +482,6 @@ async function forgotPassword(req, res) {
     });
   }
 
-  // ====================================================
-  // GENERAR CÓDIGO
-  // ====================================================
-
   const code =
     crypto
       .randomInt(
@@ -403,51 +491,13 @@ async function forgotPassword(req, res) {
       .toString();
 
   const codeHash =
-    crypto
-      .createHash('sha256')
-      .update(code)
-      .digest('hex');
-
-  // ====================================================
-  // DEBUG TEMPORAL
-  // ====================================================
-
-  console.log(
-    '--- DEBUG GENERACION RESET ---'
-  );
-
-  console.log(
-    'Email:',
-    normalizedEmail
-  );
-
-  console.log(
-    'Código generado:',
-    code
-  );
-
-  console.log(
-    'Hash generado:',
-    codeHash
-  );
-
-  console.log(
-    '------------------------------'
-  );
-
-  // ====================================================
-  // EXPIRACIÓN
-  // ====================================================
+    hashResetCode(code);
 
   const expiresAt =
     new Date(
       Date.now() +
         10 * 60 * 1000
     );
-
-  // ====================================================
-  // GUARDAR CÓDIGO
-  // ====================================================
 
   await prisma.user.update({
     where: {
@@ -462,10 +512,6 @@ async function forgotPassword(req, res) {
         expiresAt,
     },
   });
-
-  // ====================================================
-  // ENVIAR EMAIL
-  // ====================================================
 
   try {
     const {
@@ -625,8 +671,7 @@ async function forgotPassword(req, res) {
       >
         Si no solicitaste cambiar
         tu contraseña, podés ignorar
-        este correo. Tu cuenta seguirá
-        funcionando normalmente.
+        este correo.
       </p>
 
     </div>
@@ -713,7 +758,7 @@ async function forgotPassword(req, res) {
 }
 
 // ======================================================
-// VERIFICAR CÓDIGO DE RECUPERACIÓN
+// VERIFICAR CÓDIGO
 // ======================================================
 
 async function verifyResetCode(
@@ -746,9 +791,29 @@ async function verifyResetCode(
     !user.resetPasswordCodeHash ||
     !user.resetPasswordExpiresAt
   ) {
-    console.log(
-      'DEBUG: usuario o datos de recuperación inexistentes'
-    );
+    return res.status(400).json({
+      error:
+        'El código es inválido o expiró.',
+    });
+  }
+
+  if (
+    new Date() >
+    user.resetPasswordExpiresAt
+  ) {
+    await prisma.user.update({
+      where: {
+        id: user.id,
+      },
+
+      data: {
+        resetPasswordCodeHash:
+          null,
+
+        resetPasswordExpiresAt:
+          null,
+      },
+    });
 
     return res.status(400).json({
       error:
@@ -756,53 +821,65 @@ async function verifyResetCode(
     });
   }
 
-  // ====================================================
-  // CALCULAR HASH RECIBIDO
-  // ====================================================
+  const valid =
+    resetCodeMatches(
+      user.resetPasswordCodeHash,
+      code
+    );
 
-  const receivedCodeHash =
-    crypto
-      .createHash('sha256')
-      .update(code)
-      .digest('hex');
+  if (!valid) {
+    return res.status(400).json({
+      error:
+        'El código es inválido o expiró.',
+    });
+  }
 
-  // ====================================================
-  // DEBUG TEMPORAL
-  // ====================================================
+  return res.json({
+    message:
+      'Código verificado correctamente.',
+  });
+}
 
-  console.log(
-    '--- DEBUG RESET PASSWORD ---'
-  );
+// ======================================================
+// CAMBIAR CONTRASEÑA
+// ======================================================
 
-  console.log(
-    'Email:',
-    normalizedEmail
-  );
+async function resetPassword(
+  req,
+  res
+) {
+  const {
+    email,
+    code,
+    password,
+  } =
+    resetPasswordSchema.parse(
+      req.body
+    );
 
-  console.log(
-    'Código recibido:',
-    code
-  );
+  const normalizedEmail =
+    email
+      .trim()
+      .toLowerCase();
 
-  console.log(
-    'Hash guardado:',
-    user.resetPasswordCodeHash
-  );
+  const user =
+    await prisma.user.findUnique({
+      where: {
+        email:
+          normalizedEmail,
+      },
+    });
 
-  console.log(
-    'Hash calculado:',
-    receivedCodeHash
-  );
-
-  console.log(
-    'Expira:',
-    user.resetPasswordExpiresAt
-  );
-
-  console.log(
-    'Ahora:',
-    new Date()
-  );
+  if (
+    !user ||
+    !user.resetPasswordCodeHash ||
+    !user.resetPasswordExpiresAt
+  ) {
+    return res.status(400).json({
+      error:
+        'El código es inválido o expiró.',
+    });
+  }
 
   // ====================================================
   // VERIFICAR EXPIRACIÓN
@@ -812,14 +889,6 @@ async function verifyResetCode(
     new Date() >
     user.resetPasswordExpiresAt
   ) {
-    console.log(
-      'RESULTADO: código expirado'
-    );
-
-    console.log(
-      '----------------------------'
-    );
-
     await prisma.user.update({
       where: {
         id: user.id,
@@ -841,37 +910,14 @@ async function verifyResetCode(
   }
 
   // ====================================================
-  // COMPARAR HASHES
+  // VERIFICAR CÓDIGO NUEVAMENTE
   // ====================================================
 
-  const storedHash =
-    Buffer.from(
-      user.resetPasswordCodeHash,
-      'hex'
-    );
-
-  const receivedHash =
-    Buffer.from(
-      receivedCodeHash,
-      'hex'
-    );
-
   const valid =
-    storedHash.length ===
-      receivedHash.length &&
-    crypto.timingSafeEqual(
-      storedHash,
-      receivedHash
+    resetCodeMatches(
+      user.resetPasswordCodeHash,
+      code
     );
-
-  console.log(
-    '¿Hashes iguales?:',
-    valid
-  );
-
-  console.log(
-    '----------------------------'
-  );
 
   if (!valid) {
     return res.status(400).json({
@@ -880,9 +926,108 @@ async function verifyResetCode(
     });
   }
 
+  // ====================================================
+  // CREAR HASH DE LA NUEVA CONTRASEÑA
+  // ====================================================
+
+  const newPasswordHash =
+    await bcrypt.hash(
+      password,
+      10
+    );
+
+  // ====================================================
+  // ACTUALIZAR CONTRASEÑA
+  // ====================================================
+
+  const updated =
+    await prisma.user.update({
+      where: {
+        id: user.id,
+      },
+
+      data: {
+        passwordHash:
+          newPasswordHash,
+
+        resetPasswordCodeHash:
+          null,
+
+        resetPasswordExpiresAt:
+          null,
+      },
+    });
+
+  // ====================================================
+  // DEBUG TEMPORAL
+  //
+  // Volvemos a leer el usuario desde Prisma.
+  // No mostramos contraseña ni hash.
+  // ====================================================
+
+  const updatedUser =
+    await prisma.user.findUnique({
+      where: {
+        id: user.id,
+      },
+    });
+
+  const passwordReallyWorks =
+    !!updatedUser?.passwordHash &&
+    await bcrypt.compare(
+      password,
+      updatedUser.passwordHash
+    );
+
+  console.log(
+    '--- RESET PASSWORD DEBUG ---'
+  );
+
+  console.log(
+    'RESET DEBUG - email:',
+    normalizedEmail
+  );
+
+  console.log(
+    'RESET DEBUG - user id:',
+    user.id
+  );
+
+  console.log(
+    'RESET DEBUG - updated user id:',
+    updated.id
+  );
+
+  console.log(
+    'RESET DEBUG - tiene passwordHash:',
+    !!updatedUser?.passwordHash
+  );
+
+  console.log(
+    'RESET DEBUG - password guardado correctamente:',
+    passwordReallyWorks
+  );
+
+  console.log(
+    '----------------------------'
+  );
+
+  // Si esto llegara a dar false,
+  // no devolvemos un éxito engañoso.
+  if (!passwordReallyWorks) {
+    console.error(
+      'ERROR: La contraseña actualizada no supera bcrypt.compare.'
+    );
+
+    return res.status(500).json({
+      error:
+        'No pudimos actualizar la contraseña correctamente.',
+    });
+  }
+
   return res.json({
     message:
-      'Código verificado correctamente.',
+      'Contraseña actualizada correctamente.',
   });
 }
 
@@ -897,4 +1042,5 @@ module.exports = {
   me,
   forgotPassword,
   verifyResetCode,
+  resetPassword,
 };
