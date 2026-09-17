@@ -39,6 +39,10 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  // Recuperación de contraseña
+  resetPasswordCodeHash  String?
+  resetPasswordExpiresAt DateTime?
+
   reports Report[]
 
   // Conversaciones donde este usuario es quien hizo el reporte
