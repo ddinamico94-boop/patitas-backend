@@ -233,16 +233,6 @@ async function login(req, res) {
     !user ||
     !user.passwordHash
   ) {
-    console.log(
-      'LOGIN DEBUG - usuario encontrado:',
-      !!user
-    );
-
-    console.log(
-      'LOGIN DEBUG - tiene passwordHash:',
-      !!user?.passwordHash
-    );
-
     return res.status(401).json({
       error:
         'Email o contraseña incorrectos.',
@@ -254,23 +244,6 @@ async function login(req, res) {
       data.password,
       user.passwordHash
     );
-
-  // DEBUG TEMPORAL.
-  // No mostramos contraseña ni hash.
-  console.log(
-    'LOGIN DEBUG - email:',
-    normalizedEmail
-  );
-
-  console.log(
-    'LOGIN DEBUG - user id:',
-    user.id
-  );
-
-  console.log(
-    'LOGIN DEBUG - bcrypt compare:',
-    valid
-  );
 
   if (!valid) {
     return res.status(401).json({
@@ -462,7 +435,7 @@ async function forgotPassword(
       },
     });
 
-  // No revelamos si el email existe.
+  // No revelamos si existe una cuenta.
   if (!user) {
     return res.json({
       message:
@@ -470,8 +443,8 @@ async function forgotPassword(
     });
   }
 
-  // Las cuentas exclusivamente de Google
-  // no tienen contraseña que recuperar.
+  // Una cuenta exclusivamente de Google
+  // no tiene contraseña que recuperar.
   if (
     !user.passwordHash &&
     user.googleId
@@ -881,10 +854,7 @@ async function resetPassword(
     });
   }
 
-  // ====================================================
-  // VERIFICAR EXPIRACIÓN
-  // ====================================================
-
+  // Verificar vencimiento.
   if (
     new Date() >
     user.resetPasswordExpiresAt
@@ -909,10 +879,7 @@ async function resetPassword(
     });
   }
 
-  // ====================================================
-  // VERIFICAR CÓDIGO NUEVAMENTE
-  // ====================================================
-
+  // Volvemos a verificar el código.
   const valid =
     resetCodeMatches(
       user.resetPasswordCodeHash,
@@ -926,104 +893,31 @@ async function resetPassword(
     });
   }
 
-  // ====================================================
-  // CREAR HASH DE LA NUEVA CONTRASEÑA
-  // ====================================================
-
+  // Crear hash de la nueva contraseña.
   const newPasswordHash =
     await bcrypt.hash(
       password,
       10
     );
 
-  // ====================================================
-  // ACTUALIZAR CONTRASEÑA
-  // ====================================================
+  // Guardar contraseña nueva e invalidar
+  // inmediatamente el código utilizado.
+  await prisma.user.update({
+    where: {
+      id: user.id,
+    },
 
-  const updated =
-    await prisma.user.update({
-      where: {
-        id: user.id,
-      },
+    data: {
+      passwordHash:
+        newPasswordHash,
 
-      data: {
-        passwordHash:
-          newPasswordHash,
+      resetPasswordCodeHash:
+        null,
 
-        resetPasswordCodeHash:
-          null,
-
-        resetPasswordExpiresAt:
-          null,
-      },
-    });
-
-  // ====================================================
-  // DEBUG TEMPORAL
-  //
-  // Volvemos a leer el usuario desde Prisma.
-  // No mostramos contraseña ni hash.
-  // ====================================================
-
-  const updatedUser =
-    await prisma.user.findUnique({
-      where: {
-        id: user.id,
-      },
-    });
-
-  const passwordReallyWorks =
-    !!updatedUser?.passwordHash &&
-    await bcrypt.compare(
-      password,
-      updatedUser.passwordHash
-    );
-
-  console.log(
-    '--- RESET PASSWORD DEBUG ---'
-  );
-
-  console.log(
-    'RESET DEBUG - email:',
-    normalizedEmail
-  );
-
-  console.log(
-    'RESET DEBUG - user id:',
-    user.id
-  );
-
-  console.log(
-    'RESET DEBUG - updated user id:',
-    updated.id
-  );
-
-  console.log(
-    'RESET DEBUG - tiene passwordHash:',
-    !!updatedUser?.passwordHash
-  );
-
-  console.log(
-    'RESET DEBUG - password guardado correctamente:',
-    passwordReallyWorks
-  );
-
-  console.log(
-    '----------------------------'
-  );
-
-  // Si esto llegara a dar false,
-  // no devolvemos un éxito engañoso.
-  if (!passwordReallyWorks) {
-    console.error(
-      'ERROR: La contraseña actualizada no supera bcrypt.compare.'
-    );
-
-    return res.status(500).json({
-      error:
-        'No pudimos actualizar la contraseña correctamente.',
-    });
-  }
+      resetPasswordExpiresAt:
+        null,
+    },
+  });
 
   return res.json({
     message:
