@@ -68,6 +68,19 @@ const forgotPasswordSchema = z.object({
     .email('Email inválido'),
 });
 
+const verifyResetCodeSchema = z.object({
+  email: z
+    .string()
+    .email('Email inválido'),
+
+  code: z
+    .string()
+    .regex(
+      /^\d{6}$/,
+      'El código debe tener 6 dígitos'
+    ),
+});
+
 // ======================================================
 // USUARIO PÚBLICO
 // ======================================================
@@ -245,7 +258,6 @@ async function googleLogin(
       .trim()
       .toLowerCase();
 
-  // Busca primero por googleId
   let user =
     await prisma.user.findUnique({
       where: {
@@ -254,8 +266,6 @@ async function googleLogin(
     });
 
   if (!user) {
-    // Si no existe por googleId,
-    // buscamos por email.
     user =
       await prisma.user.findUnique({
         where: {
@@ -265,8 +275,6 @@ async function googleLogin(
       });
 
     if (user) {
-      // Vinculamos Google con
-      // la cuenta existente.
       user =
         await prisma.user.update({
           where: {
@@ -282,8 +290,6 @@ async function googleLogin(
           },
         });
     } else {
-      // Creamos un usuario nuevo
-      // proveniente de Google.
       user =
         await prisma.user.create({
           data: {
@@ -370,12 +376,7 @@ async function forgotPassword(
       },
     });
 
-  /*
-   * No indicamos si el email existe
-   * o no. Esto evita que alguien
-   * pueda descubrir qué correos
-   * están registrados.
-   */
+  // No revelamos si el email existe.
   if (!user) {
     return res.json({
       message:
@@ -383,14 +384,8 @@ async function forgotPassword(
     });
   }
 
-  /*
-   * Si la cuenta solamente utiliza
-   * Google y nunca configuró una
-   * contraseña, no enviamos código.
-   *
-   * Seguimos devolviendo el mismo
-   * mensaje por seguridad.
-   */
+  // Si solamente utiliza Google,
+  // no enviamos recuperación de contraseña.
   if (
     !user.passwordHash &&
     user.googleId
@@ -401,10 +396,7 @@ async function forgotPassword(
     });
   }
 
-  /*
-   * Generamos un código aleatorio
-   * entre 100000 y 999999.
-   */
+  // Código aleatorio de 6 dígitos.
   const code =
     crypto
       .randomInt(
@@ -413,20 +405,14 @@ async function forgotPassword(
       )
       .toString();
 
-  /*
-   * Guardamos solamente el hash.
-   * El código real solamente
-   * se envía por email.
-   */
+  // Guardamos solamente el hash.
   const codeHash =
     crypto
       .createHash('sha256')
       .update(code)
       .digest('hex');
 
-  /*
-   * El código dura 10 minutos.
-   */
+  // Expira en 10 minutos.
   const expiresAt =
     new Date(
       Date.now() +
@@ -629,21 +615,12 @@ async function forgotPassword(
         `,
       });
 
-    /*
-     * Resend puede devolver un
-     * objeto error aunque la llamada
-     * no lance una excepción.
-     */
     if (error) {
       console.error(
         'Error de Resend:',
         error
       );
 
-      /*
-       * Como el email no salió,
-       * invalidamos el código.
-       */
       await prisma.user.update({
         where: {
           id: user.id,
@@ -671,10 +648,6 @@ async function forgotPassword(
       error
     );
 
-    /*
-     * También invalidamos el código
-     * si ocurre una excepción.
-     */
     await prisma.user.update({
       where: {
         id: user.id,
@@ -704,6 +677,145 @@ async function forgotPassword(
 }
 
 // ======================================================
+// VERIFICAR CÓDIGO DE RECUPERACIÓN
+// ======================================================
+
+async function verifyResetCode(
+  req,
+  res
+) {
+  const {
+    email,
+    code,
+  } =
+    verifyResetCodeSchema.parse(
+      req.body
+    );
+
+  const normalizedEmail =
+    email
+      .trim()
+      .toLowerCase();
+
+  const user =
+    await prisma.user.findUnique({
+      where: {
+        email:
+          normalizedEmail,
+      },
+    });
+
+  /*
+   * Si no existe el usuario,
+   * no hay código guardado
+   * o no hay fecha de expiración.
+   */
+  if (
+    !user ||
+    !user.resetPasswordCodeHash ||
+    !user.resetPasswordExpiresAt
+  ) {
+    return res.status(400).json({
+      error:
+        'El código es inválido o expiró.',
+    });
+  }
+
+  /*
+   * Comprobamos que todavía
+   * no hayan pasado los 10 minutos.
+   */
+  if (
+    new Date() >
+    user.resetPasswordExpiresAt
+  ) {
+    /*
+     * Si venció, eliminamos
+     * el código guardado.
+     */
+    await prisma.user.update({
+      where: {
+        id: user.id,
+      },
+
+      data: {
+        resetPasswordCodeHash:
+          null,
+
+        resetPasswordExpiresAt:
+          null,
+      },
+    });
+
+    return res.status(400).json({
+      error:
+        'El código es inválido o expiró.',
+    });
+  }
+
+  /*
+   * Convertimos el código recibido
+   * al mismo SHA-256 utilizado al
+   * solicitar la recuperación.
+   */
+  const receivedCodeHash =
+    crypto
+      .createHash('sha256')
+      .update(code)
+      .digest('hex');
+
+  /*
+   * Convertimos ambos hashes
+   * a Buffer para compararlos
+   * utilizando timingSafeEqual.
+   */
+  const storedHash =
+    Buffer.from(
+      user.resetPasswordCodeHash,
+      'hex'
+    );
+
+  const receivedHash =
+    Buffer.from(
+      receivedCodeHash,
+      'hex'
+    );
+
+  /*
+   * timingSafeEqual evita
+   * comparaciones de strings
+   * susceptibles a timing attacks.
+   */
+  const valid =
+    storedHash.length ===
+      receivedHash.length &&
+    crypto.timingSafeEqual(
+      storedHash,
+      receivedHash
+    );
+
+  if (!valid) {
+    return res.status(400).json({
+      error:
+        'El código es inválido o expiró.',
+    });
+  }
+
+  /*
+   * IMPORTANTE:
+   *
+   * Todavía NO eliminamos el código.
+   * Lo necesitaremos nuevamente en
+   * el siguiente endpoint cuando
+   * guardemos la contraseña nueva.
+   */
+  return res.json({
+    message:
+      'Código verificado correctamente.',
+  });
+}
+
+// ======================================================
 // EXPORTS
 // ======================================================
 
@@ -713,4 +825,5 @@ module.exports = {
   googleLogin,
   me,
   forgotPassword,
+  verifyResetCode,
 };

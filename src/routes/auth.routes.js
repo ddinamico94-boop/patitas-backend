@@ -8,6 +8,7 @@ const {
   googleLogin,
   me,
   forgotPassword,
+  verifyResetCode,
 } = require(
   '../controllers/auth.controller'
 );
@@ -20,31 +21,55 @@ const {
 
 const router = Router();
 
-// Registro
+// ======================================================
+// REGISTRO
+// ======================================================
+
 router.post(
   '/register',
   register
 );
 
-// Login con email y contraseña
+// ======================================================
+// LOGIN EMAIL + CONTRASEÑA
+// ======================================================
+
 router.post(
   '/login',
   login
 );
 
-// Login con Google
+// ======================================================
+// LOGIN GOOGLE
+// ======================================================
+
 router.post(
   '/google',
   googleLogin
 );
 
-// Solicitar código para recuperar contraseña
+// ======================================================
+// SOLICITAR CÓDIGO DE RECUPERACIÓN
+// ======================================================
+
 router.post(
   '/forgot-password',
   forgotPassword
 );
 
-// Obtener usuario autenticado
+// ======================================================
+// VERIFICAR CÓDIGO DE RECUPERACIÓN
+// ======================================================
+
+router.post(
+  '/verify-reset-code',
+  verifyResetCode
+);
+
+// ======================================================
+// USUARIO AUTENTICADO
+// ======================================================
+
 router.get(
   '/me',
   requireAuth,
