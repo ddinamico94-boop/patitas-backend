@@ -208,10 +208,7 @@ async function login(req, res) {
 // GOOGLE LOGIN
 // ======================================================
 
-async function googleLogin(
-  req,
-  res
-) {
+async function googleLogin(req, res) {
   const {
     credential,
   } =
@@ -349,10 +346,7 @@ async function me(req, res) {
 // OLVIDÉ MI CONTRASEÑA
 // ======================================================
 
-async function forgotPassword(
-  req,
-  res
-) {
+async function forgotPassword(req, res) {
   const {
     email,
   } =
@@ -384,8 +378,8 @@ async function forgotPassword(
     });
   }
 
-  // Si solamente usa Google,
-  // no enviamos código.
+  // Si la cuenta solamente usa Google,
+  // no enviamos recuperación.
   if (
     !user.passwordHash &&
     user.googleId
@@ -396,7 +390,10 @@ async function forgotPassword(
     });
   }
 
-  // Generamos un código de 6 dígitos.
+  // ====================================================
+  // GENERAR CÓDIGO
+  // ====================================================
+
   const code =
     crypto
       .randomInt(
@@ -405,21 +402,53 @@ async function forgotPassword(
       )
       .toString();
 
-  // Generamos SHA-256.
   const codeHash =
     crypto
       .createHash('sha256')
       .update(code)
       .digest('hex');
 
-  // Vence en 10 minutos.
+  // ====================================================
+  // DEBUG TEMPORAL
+  // ====================================================
+
+  console.log(
+    '--- DEBUG GENERACION RESET ---'
+  );
+
+  console.log(
+    'Email:',
+    normalizedEmail
+  );
+
+  console.log(
+    'Código generado:',
+    code
+  );
+
+  console.log(
+    'Hash generado:',
+    codeHash
+  );
+
+  console.log(
+    '------------------------------'
+  );
+
+  // ====================================================
+  // EXPIRACIÓN
+  // ====================================================
+
   const expiresAt =
     new Date(
       Date.now() +
         10 * 60 * 1000
     );
 
-  // Guardamos hash + vencimiento.
+  // ====================================================
+  // GUARDAR CÓDIGO
+  // ====================================================
+
   await prisma.user.update({
     where: {
       id: user.id,
@@ -433,6 +462,10 @@ async function forgotPassword(
         expiresAt,
     },
   });
+
+  // ====================================================
+  // ENVIAR EMAIL
+  // ====================================================
 
   try {
     const {
@@ -452,6 +485,7 @@ async function forgotPassword(
         html: `
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
   <meta charset="UTF-8" />
 
@@ -612,6 +646,7 @@ async function forgotPassword(
   </div>
 
 </body>
+
 </html>
         `,
       });
@@ -706,8 +741,6 @@ async function verifyResetCode(
       },
     });
 
-  // No existe el usuario o no tiene
-  // recuperación pendiente.
   if (
     !user ||
     !user.resetPasswordCodeHash ||
@@ -722,6 +755,16 @@ async function verifyResetCode(
         'El código es inválido o expiró.',
     });
   }
+
+  // ====================================================
+  // CALCULAR HASH RECIBIDO
+  // ====================================================
+
+  const receivedCodeHash =
+    crypto
+      .createHash('sha256')
+      .update(code)
+      .digest('hex');
 
   // ====================================================
   // DEBUG TEMPORAL
@@ -744,6 +787,11 @@ async function verifyResetCode(
   console.log(
     'Hash guardado:',
     user.resetPasswordCodeHash
+  );
+
+  console.log(
+    'Hash calculado:',
+    receivedCodeHash
   );
 
   console.log(
@@ -791,21 +839,6 @@ async function verifyResetCode(
         'El código es inválido o expiró.',
     });
   }
-
-  // ====================================================
-  // CALCULAR HASH DEL CÓDIGO RECIBIDO
-  // ====================================================
-
-  const receivedCodeHash =
-    crypto
-      .createHash('sha256')
-      .update(code)
-      .digest('hex');
-
-  console.log(
-    'Hash calculado:',
-    receivedCodeHash
-  );
 
   // ====================================================
   // COMPARAR HASHES
