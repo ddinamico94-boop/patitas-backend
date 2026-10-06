@@ -33,6 +33,8 @@ const allowedOrigins = [
   'http://localhost:8443',
   'https://www.patitastucuman.com',
   'https://patitastucuman.com',
+  'https://www.patitastucuman.com.ar',
+  'https://patitastucuman.com.ar',
 ];
 
 app.use(
