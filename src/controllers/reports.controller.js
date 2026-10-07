@@ -533,7 +533,7 @@ async function sitemap(
     });
 
   const baseUrl =
-    'https://www.patitastucuman.com';
+    'https://www.patitastucuman.com.ar';
 
   const reportUrls =
     reports
@@ -686,14 +686,14 @@ async function sharePreview(
     report.status;
 
   const reportUrl =
-    `https://www.patitastucuman.com/reporte/${encodeURIComponent(
+    `https://www.patitastucuman.com.ar/reporte/${encodeURIComponent(
       report.id
     )}`;
 
   const image =
     report.images?.[0]
       ?.url ||
-    'https://www.patitastucuman.com/og-image.png';
+    'https://www.patitastucuman.com.ar/og-image.png';
 
   // Para adopciones hacemos el título
   // un poco más natural.

@@ -410,7 +410,7 @@ async function forgotPassword(req, res) {
             "
           >
             <img
-              src="https://www.patitastucuman.com/favicon.svg"
+              src="https://www.patitastucuman.com.ar/favicon.svg"
               width="36"
               height="36"
               alt=""
@@ -432,7 +432,7 @@ async function forgotPassword(req, res) {
             "
           >
             <img
-              src="https://www.patitastucuman.com/logo-texto.png"
+              src="https://www.patitastucuman.com.ar/logo-texto.png"
               width="205"
               alt="Patitas Tucumán"
               style="

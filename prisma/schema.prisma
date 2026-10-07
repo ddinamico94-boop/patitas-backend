@@ -50,16 +50,18 @@ model User {
 
   // Conversaciones donde este usuario es quien hizo el reporte
   conversationsAsReporter Conversation[] @relation("ReporterConversations")
+
   // Conversaciones donde este usuario es quien quiere ayudar
-  conversationsAsHelper   Conversation[] @relation("HelperConversations")
-  messages                Message[]
+  conversationsAsHelper Conversation[] @relation("HelperConversations")
+
+  messages Message[]
 
   @@map("users")
 }
 
 model Report {
   id          String       @id @default(uuid())
-  name        String // nombre del animal
+  name        String
   type        AnimalType
   status      AnimalStatus @default(perdido)
   zone        String
@@ -69,10 +71,10 @@ model Report {
   breed       String?
   color       String?
   size        String?
-  sex String?
-age String?
+  sex         String?
+  age         String?
 
-  // datos de contacto (se copian del user al crear, pero pueden variar)
+  // Datos de contacto
   contactName String
   phone       String
   email       String
@@ -106,9 +108,7 @@ model ReportImage {
   @@map("report_images")
 }
 
-// Un chat privado 1 a 1 por reporte: entre quien reportó y una persona
-// puntual que quiere ayudar. Cada persona interesada tiene su propia
-// conversación (no se mezclan entre sí).
+// Un chat privado 1 a 1 por reporte
 model Conversation {
   id String @id @default(uuid())
 
@@ -123,16 +123,12 @@ model Conversation {
 
   messages Message[]
 
-  // Hasta qué momento leyó cada uno de los dos participantes. Con esto
-  // calculamos el contador de "no leídos" tipo WhatsApp, por separado
-  // para cada persona (nunca se mezcla entre conversaciones ni usuarios).
   reporterLastReadAt DateTime?
   helperLastReadAt   DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Un mismo helper no puede tener 2 conversaciones para el mismo reporte
   @@unique([reportId, helperId])
   @@index([reporterId])
   @@index([helperId])
@@ -154,4 +150,30 @@ model Message {
 
   @@index([conversationId])
   @@map("messages")
+}
+
+// ============================================================
+// QUIRÓFANO MÓVIL - CASTRACIONES GRATUITAS
+// ============================================================
+
+model QuirofanoMovil {
+  id          String   @id @default(uuid())
+  nombre      String   @default("Quirófano Móvil")
+  direccion   String
+  barrio      String?
+  lat         Float
+  lng         Float
+  fechaInicio DateTime
+  fechaFin    DateTime
+  horario     String?
+  informacion String?
+  activo      Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([activo])
+  @@index([fechaInicio])
+  @@index([fechaFin])
+  @@map("quirofanos_moviles")
 }

@@ -2,8 +2,6 @@ require('dotenv').config();
 require('express-async-errors');
 
 const compression = require('compression');
-
-
 const http = require('http');
 const express = require('express');
 const cors = require('cors');
@@ -16,6 +14,8 @@ const reportsRoutes = require('./routes/reports.routes');
 const adminRoutes = require('./routes/admin.routes');
 const uploadsRoutes = require('./routes/uploads.routes');
 const conversationsRoutes = require('./routes/conversations.routes');
+const quirofanoRoutes = require('./routes/quirofano.routes');
+
 const errorHandler = require('./middleware/errorHandler');
 const { initSocket } = require('./lib/socket');
 
@@ -25,8 +25,6 @@ app.use(compression());
 app.use(helmet());
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 app.use(express.json({ limit: '1mb' }));
-
-
 
 const allowedOrigins = [
   'http://localhost:5173',
@@ -50,8 +48,11 @@ app.use(
   })
 );
 
-// Limita intentos de login/registro para evitar fuerza bruta
-const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30 });
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+});
+
 app.use('/api/auth', authLimiter, authRoutes);
 
 app.use('/api/reports', reportsRoutes);
@@ -59,17 +60,43 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/uploads', uploadsRoutes);
 app.use('/api/conversations', conversationsRoutes);
 
-app.get('/api/health', (_req, res) => res.json({ ok: true }));
+// ============================================================
+// QUIRÓFANO MÓVIL
+// ============================================================
+app.use('/api/quirofano', quirofanoRoutes);
 
-app.use((req, res) => res.status(404).json({ error: `Ruta no encontrada: ${req.method} ${req.path}` }));
+// ============================================================
+// HEALTH CHECK
+// ============================================================
+app.get('/api/health', (_req, res) => {
+  res.json({ ok: true });
+});
+
+// ============================================================
+// RUTA NO ENCONTRADA
+// ============================================================
+app.use((req, res) => {
+  res.status(404).json({
+    error: `Ruta no encontrada: ${req.method} ${req.path}`,
+  });
+});
+
+// ============================================================
+// MANEJO DE ERRORES
+// ============================================================
 app.use(errorHandler);
 
-// Antes: app.listen(...). Ahora necesitamos el server HTTP "crudo" para
-// poder engancharle Socket.IO encima, en el mismo puerto.
+// ============================================================
+// SERVIDOR HTTP
+// ============================================================
 const server = http.createServer(app);
+
 initSocket(server);
 
 const PORT = process.env.PORT || 4000;
+
 server.listen(PORT, () => {
-  console.log(`🐾 API de Patitas Tucumán corriendo en http://localhost:${PORT}`);
+  console.log(
+    `🐾 API de Patitas Tucumán corriendo en http://localhost:${PORT}`
+  );
 });
