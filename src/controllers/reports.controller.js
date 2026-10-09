@@ -577,11 +577,7 @@ async function sitemap(
     <priority>0.8</priority>
   </url>
 
-  <url>
-    <loc>${baseUrl}/crear-reporte</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
+  
 
 ${reportUrls}
 
