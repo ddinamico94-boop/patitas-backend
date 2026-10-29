@@ -1,7 +1,7 @@
 const { Router } = require('express');
 const multer = require('multer');
 const { requireAuth } = require('../middleware/auth');
-const { uploadImage } = require('../lib/supabase');
+const { uploadImage, deleteImage } = require('../lib/cloudinary');
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -22,11 +22,18 @@ router.post('/', requireAuth, upload.array('images', 10), async (req, res) => {
     return res.status(400).json({ error: 'No se recibieron archivos.' });
   }
 
-  const urls = await Promise.all(
-    req.files.map((file) => uploadImage(file.buffer, file.originalname, file.mimetype))
-  );
-
-  res.status(201).json({ urls });
+  const uploaded = [];
+  try {
+    // Secuencial: conserva el orden y limita las subidas simultáneas.
+    for (const file of req.files) {
+      uploaded.push(await uploadImage(file.buffer));
+    }
+    res.status(201).json({ urls: uploaded.map((image) => image.url) });
+  } catch (error) {
+    // Si falla el lote, evita dejar las fotos anteriores consumiendo cuota.
+    await Promise.allSettled(uploaded.map((image) => deleteImage(image.publicId)));
+    throw error;
+  }
 });
 
 module.exports = router;
