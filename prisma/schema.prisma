@@ -101,6 +101,7 @@ model Report {
 model ReportImage {
   id       String @id @default(uuid())
   url      String
+  publicId String?
   order    Int    @default(0)
   report   Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
   reportId String
