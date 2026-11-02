@@ -79,6 +79,11 @@ model Report {
   phone       String
   email       String
 
+  // Seguimiento opcional por WhatsApp
+  whatsappFollowupConsent        Boolean   @default(false)
+  whatsappFollowupLastSentAt     DateTime?
+  whatsappFollowupReservedUntil  DateTime?
+
   mapLat Float?
   mapLng Float?
 
@@ -177,4 +182,34 @@ model QuirofanoMovil {
   @@index([fechaInicio])
   @@index([fechaFin])
   @@map("quirofanos_moviles")
+}
+
+
+enum WhatsappSubmissionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model WhatsappReportSubmission {
+  id                  String                   @id @default(uuid())
+  whatsappPhone       String
+  reportType          String
+  originalResponses   Json
+  animalDescription   String?
+  locationDescription String?
+  contactName         String?
+  contactPhone        String?
+  contactEmail        String?
+  status              WhatsappSubmissionStatus @default(PENDING)
+  rejectionReason     String?
+  reviewedAt          DateTime?
+  reviewedBy          String?
+  reportId            String?                  @unique
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+
+  @@index([status, createdAt])
+  @@index([whatsappPhone])
+  @@map("whatsapp_report_submissions")
 }

@@ -1,77 +1,48 @@
-const { z } = require('zod');
-const prisma = require('../lib/prisma');
+const { z } = require("zod")
+const prisma = require("../lib/prisma")
+const { deleteImage } = require("../lib/cloudinary")
 
 // ======================================================
 // ENUMS
 // ======================================================
 
-const AnimalType = z.enum([
-  'perro',
-  'gato',
-  'otro',
-]);
+const AnimalType = z.enum(["perro", "gato", "otro"])
 
 const AnimalStatus = z.enum([
-  'perdido',
-  'encontrado',
-  'en_calle',
-  'ayudado',
-  'rescatado',
-  'maltrato',
-  'en_adopcion',
-  'adoptado',
-]);
+  "perdido",
+  "encontrado",
+  "en_calle",
+  "ayudado",
+  "rescatado",
+  "maltrato",
+  "en_adopcion",
+  "adoptado",
+])
 
-
-const AnimalSex = z.enum([
-  'macho',
-  'hembra',
-]);
+const AnimalSex = z.enum(["macho", "hembra"])
 
 // ======================================================
 // VALIDACIONES
 // ======================================================
 
 const createReportSchema = z.object({
-  name: z
-    .string()
-    .min(
-      1,
-      'El nombre del animal es obligatorio'
-    ),
+  name: z.string().min(1, "El nombre del animal es obligatorio"),
 
   type: AnimalType,
 
-  status: AnimalStatus.default(
-    'perdido'
-  ),
+  status: AnimalStatus.default("perdido"),
 
-  zone: z
-    .string()
-    .min(
-      1,
-      'La zona es obligatoria'
-    ),
+  zone: z.string().min(1, "La zona es obligatoria"),
 
-  address: z
-    .string()
-    .optional(),
+  address: z.string().optional(),
 
-  description: z
-    .string()
-    .optional(),
+  description: z.string().optional(),
 
-  breed: z
-    .string()
-    .optional(),
+  breed: z.string().optional(),
 
-  color: z
-    .string()
-    .optional(),
+  color: z.string().optional(),
 
-  size: z
-    .string()
-    .optional(),
+  size: z.string().optional(),
 
   // ==========================================
   // DATOS PARA ADOPCIÓN
@@ -79,83 +50,50 @@ const createReportSchema = z.object({
 
   sex: AnimalSex.optional(),
 
-  age: z
-    .string()
-    .optional(),
+  age: z.string().optional(),
 
   // ==========================================
 
-  contactName: z
-    .string()
-    .min(
-      1,
-      'El nombre de contacto es obligatorio'
-    ),
+  contactName: z.string().min(1, "El nombre de contacto es obligatorio"),
 
-  phone: z
-    .string()
-    .min(
-      1,
-      'El teléfono es obligatorio'
-    ),
+  phone: z.string().min(1, "El teléfono es obligatorio"),
 
-  email: z
-    .string()
-    .email(
-      'Email de contacto inválido'
-    ),
+  email: z.string().email("Email de contacto inválido"),
 
-  mapLat: z
-    .number()
-    .optional(),
+  mapLat: z.number().optional(),
 
-  mapLng: z
-    .number()
-    .optional(),
+  mapLng: z.number().optional(),
 
   images: z
     .array(
-      z.string().url()
+      z.object({
+        url: z.string().url(),
+        publicId: z.string().min(1),
+      }),
     )
     .optional()
     .default([]),
-});
+})
 
-const updateReportSchema =
-  createReportSchema.partial();
+const updateReportSchema = createReportSchema.partial()
 
 // ======================================================
 // QUERY DE LISTADO
 // ======================================================
 
 const listQuerySchema = z.object({
-  status:
-    AnimalStatus.optional(),
+  status: AnimalStatus.optional(),
 
-  type:
-    AnimalType.optional(),
+  type: AnimalType.optional(),
 
-  zone:
-    z.string().optional(),
+  zone: z.string().optional(),
 
-  search:
-    z.string().optional(),
+  search: z.string().optional(),
 
-  page:
-    z.coerce
-      .number()
-      .int()
-      .min(1)
-      .default(1),
+  page: z.coerce.number().int().min(1).default(1),
 
-  pageSize:
-    z.coerce
-      .number()
-      .int()
-      .min(1)
-      .max(50)
-      .default(12),
-});
+  pageSize: z.coerce.number().int().min(1).max(50).default(12),
+})
 
 // ======================================================
 // INCLUDE
@@ -164,20 +102,17 @@ const listQuerySchema = z.object({
 const reportInclude = {
   images: {
     orderBy: {
-      order: 'asc',
+      order: "asc",
     },
   },
-};
+}
 
 // ======================================================
 // LISTAR REPORTES
 // ======================================================
 
 async function list(req, res) {
-  const q =
-    listQuerySchema.parse(
-      req.query
-    );
+  const q = listQuerySchema.parse(req.query)
 
   const where = {
     ...(q.status && {
@@ -197,75 +132,62 @@ async function list(req, res) {
         {
           name: {
             contains: q.search,
-            mode: 'insensitive',
+            mode: "insensitive",
           },
         },
 
         {
           breed: {
             contains: q.search,
-            mode: 'insensitive',
+            mode: "insensitive",
           },
         },
 
         {
           description: {
             contains: q.search,
-            mode: 'insensitive',
+            mode: "insensitive",
           },
         },
 
         {
           zone: {
             contains: q.search,
-            mode: 'insensitive',
+            mode: "insensitive",
           },
         },
       ],
     }),
-  };
+  }
 
-  const [
-    items,
-    total,
-  ] =
-    await Promise.all([
-      prisma.report.findMany({
-        where,
+  const [items, total] = await Promise.all([
+    prisma.report.findMany({
+      where,
 
-        include:
-          reportInclude,
+      include: reportInclude,
 
-        orderBy: {
-          createdAt: 'desc',
-        },
+      orderBy: {
+        createdAt: "desc",
+      },
 
-        skip:
-          (q.page - 1) *
-          q.pageSize,
+      skip: (q.page - 1) * q.pageSize,
 
-        take:
-          q.pageSize,
-      }),
+      take: q.pageSize,
+    }),
 
-      prisma.report.count({
-        where,
-      }),
-    ]);
+    prisma.report.count({
+      where,
+    }),
+  ])
 
   res.json({
     items,
     total,
     page: q.page,
-    pageSize:
-      q.pageSize,
+    pageSize: q.pageSize,
 
-    totalPages:
-      Math.ceil(
-        total /
-          q.pageSize
-      ),
-  });
+    totalPages: Math.ceil(total / q.pageSize),
+  })
 }
 
 // ======================================================
@@ -273,28 +195,23 @@ async function list(req, res) {
 // ======================================================
 
 async function getById(req, res) {
-  const report =
-    await prisma.report.findUnique({
-      where: {
-        id: req.params.id,
-      },
+  const report = await prisma.report.findUnique({
+    where: {
+      id: req.params.id,
+    },
 
-      include:
-        reportInclude,
-    });
+    include: reportInclude,
+  })
 
   if (!report) {
-    return res
-      .status(404)
-      .json({
-        error:
-          'Reporte no encontrado.',
-      });
+    return res.status(404).json({
+      error: "Reporte no encontrado.",
+    })
   }
 
   res.json({
     report,
-  });
+  })
 }
 
 // ======================================================
@@ -302,47 +219,31 @@ async function getById(req, res) {
 // ======================================================
 
 async function create(req, res) {
-  const data =
-    createReportSchema.parse(
-      req.body
-    );
+  const data = createReportSchema.parse(req.body)
 
-  const {
-    images,
-    ...rest
-  } = data;
+  const { images, ...rest } = data
 
-  const report =
-    await prisma.report.create({
-      data: {
-        ...rest,
+  const report = await prisma.report.create({
+    data: {
+      ...rest,
 
-        userId:
-          req.user?.id,
+      userId: req.user?.id,
 
-        images: {
-          create:
-            images.map(
-              (
-                url,
-                order
-              ) => ({
-                url,
-                order,
-              })
-            ),
-        },
+      images: {
+        create: images.map((image, order) => ({
+          url: image.url,
+          publicId: image.publicId,
+          order,
+        })),
       },
+    },
 
-      include:
-        reportInclude,
-    });
+    include: reportInclude,
+  })
 
-  res
-    .status(201)
-    .json({
-      report,
-    });
+  res.status(201).json({
+    report,
+  })
 }
 
 // ======================================================
@@ -350,86 +251,83 @@ async function create(req, res) {
 // ======================================================
 
 async function update(req, res) {
-  const existing =
-    await prisma.report.findUnique({
-      where: {
-        id: req.params.id,
-      },
-    });
+  const existing = await prisma.report.findUnique({
+    where: {
+      id: req.params.id,
+    },
+    include: {
+      images: true,
+    },
+  })
 
   if (!existing) {
-    return res
-      .status(404)
-      .json({
-        error:
-          'Reporte no encontrado.',
-      });
+    return res.status(404).json({
+      error: "Reporte no encontrado.",
+    })
   }
 
-  const isOwner =
-    existing.userId ===
-    req.user.id;
+  const isOwner = existing.userId === req.user.id
 
-  const isAdmin =
-    req.user.role ===
-    'ADMIN';
+  const isAdmin = req.user.role === "ADMIN"
 
-  if (
-    !isOwner &&
-    !isAdmin
-  ) {
-    return res
-      .status(403)
-      .json({
-        error:
-          'No podés editar un reporte que no es tuyo.',
-      });
+  if (!isOwner && !isAdmin) {
+    return res.status(403).json({
+      error: "No podés editar un reporte que no es tuyo.",
+    })
   }
 
-  const data =
-    updateReportSchema.parse(
-      req.body
-    );
+  const data = updateReportSchema.parse(req.body)
 
-  const {
-    images,
-    ...rest
-  } = data;
+  const { images, ...rest } = data
 
-  const report =
-    await prisma.report.update({
-      where: {
-        id: req.params.id,
-      },
+  const report = await prisma.report.update({
+    where: {
+      id: req.params.id,
+    },
 
-      data: {
-        ...rest,
+    data: {
+      ...rest,
 
-        ...(images && {
-          images: {
-            deleteMany: {},
+      ...(images !== undefined && {
+        images: {
+          deleteMany: {},
 
-            create:
-              images.map(
-                (
-                  url,
-                  order
-                ) => ({
-                  url,
-                  order,
-                })
-              ),
-          },
-        }),
-      },
+          create: images.map((image, order) => ({
+            url: image.url,
+            publicId: image.publicId,
+            order,
+          })),
+        },
+      }),
+    },
 
-      include:
-        reportInclude,
-    });
+    include: reportInclude,
+  })
+
+  if (images !== undefined) {
+    const newPublicIds = new Set(images.map((image) => image.publicId))
+
+    const oldPublicIds = existing.images
+      .map((image) => image.publicId)
+      .filter((publicId) => publicId && !newPublicIds.has(publicId))
+
+    const results = await Promise.allSettled(
+      oldPublicIds.map((publicId) => deleteImage(publicId)),
+    )
+
+    results.forEach((result) => {
+      if (result.status === "rejected") {
+        console.error(
+          "No se pudo eliminar una imagen anterior de Cloudinary:",
+          result.reason,
+        )
+      }
+    })
+  }
 
   res.json({
     report,
-  });
+  })
 }
 
 // ======================================================
@@ -437,118 +335,108 @@ async function update(req, res) {
 // ======================================================
 
 async function remove(req, res) {
-  const existing =
-    await prisma.report.findUnique({
-      where: {
-        id: req.params.id,
-      },
-    });
+  const existing = await prisma.report.findUnique({
+    where: {
+      id: req.params.id,
+    },
+    include: {
+      images: true,
+    },
+  })
 
   if (!existing) {
-    return res
-      .status(404)
-      .json({
-        error:
-          'Reporte no encontrado.',
-      });
+    return res.status(404).json({
+      error: "Reporte no encontrado.",
+    })
   }
 
-  const isOwner =
-    existing.userId ===
-    req.user.id;
+  const isOwner = existing.userId === req.user.id
 
-  const isAdmin =
-    req.user.role ===
-    'ADMIN';
+  const isAdmin = req.user.role === "ADMIN"
 
-  if (
-    !isOwner &&
-    !isAdmin
-  ) {
-    return res
-      .status(403)
-      .json({
-        error:
-          'No podés borrar un reporte que no es tuyo.',
-      });
+  if (!isOwner && !isAdmin) {
+    return res.status(403).json({
+      error: "No podés borrar un reporte que no es tuyo.",
+    })
   }
 
   await prisma.report.delete({
     where: {
       id: req.params.id,
     },
-  });
+  })
 
-  res
-    .status(204)
-    .send();
+  const publicIds = existing.images
+    .map((image) => image.publicId)
+    .filter(Boolean)
+
+  const results = await Promise.allSettled(
+    publicIds.map((publicId) => deleteImage(publicId)),
+  )
+
+  results.forEach((result) => {
+    if (result.status === "rejected") {
+      console.error(
+        "No se pudo eliminar una imagen de Cloudinary:",
+        result.reason,
+      )
+    }
+  })
+
+  res.status(204).send()
 }
 
 // ======================================================
 // MIS REPORTES
 // ======================================================
 
-async function myReports(
-  req,
-  res
-) {
-  const items =
-    await prisma.report.findMany({
-      where: {
-        userId:
-          req.user.id,
-      },
+async function myReports(req, res) {
+  const items = await prisma.report.findMany({
+    where: {
+      userId: req.user.id,
+    },
 
-      include:
-        reportInclude,
+    include: reportInclude,
 
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
+    orderBy: {
+      createdAt: "desc",
+    },
+  })
 
   res.json({
     items,
-  });
+  })
 }
 
 // ======================================================
 // SITEMAP
 // ======================================================
 
-async function sitemap(
-  req,
-  res
-) {
-  const reports =
-    await prisma.report.findMany({
-      select: {
-        id: true,
-        createdAt: true,
-      },
+async function sitemap(req, res) {
+  const reports = await prisma.report.findMany({
+    select: {
+      id: true,
+      createdAt: true,
+    },
 
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
+    orderBy: {
+      createdAt: "desc",
+    },
+  })
 
-  const baseUrl =
-    'https://www.patitastucuman.com.ar';
+  const baseUrl = "https://www.patitastucuman.com.ar"
 
-  const reportUrls =
-    reports
-      .map(
-        (report) => `
+  const reportUrls = reports
+    .map(
+      (report) => `
   <url>
-    <loc>${baseUrl}/reporte/${encodeURIComponent(
-      report.id
-    )}</loc>
+    <loc>${baseUrl}/reporte/${encodeURIComponent(report.id)}</loc>
     <lastmod>${report.createdAt.toISOString()}</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.8</priority>
-  </url>`
-      )
-      .join('');
+  </url>`,
+    )
+    .join("")
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -581,154 +469,94 @@ async function sitemap(
 
 ${reportUrls}
 
-</urlset>`;
+</urlset>`
 
-  res.setHeader(
-    'Content-Type',
-    'application/xml; charset=utf-8'
-  );
+  res.setHeader("Content-Type", "application/xml; charset=utf-8")
 
-  res
-    .status(200)
-    .send(xml);
+  res.status(200).send(xml)
 }
 
 // ======================================================
 // ESCAPAR HTML
 // ======================================================
 
-function escapeHtml(
-  value = ''
-) {
+function escapeHtml(value = "") {
   return String(value)
-    .replace(
-      /&/g,
-      '&amp;'
-    )
-    .replace(
-      /</g,
-      '&lt;'
-    )
-    .replace(
-      />/g,
-      '&gt;'
-    )
-    .replace(
-      /"/g,
-      '&quot;'
-    )
-    .replace(
-      /'/g,
-      '&#039;'
-    );
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;")
 }
 
 // ======================================================
 // PREVIEW PARA COMPARTIR
 // ======================================================
 
-async function sharePreview(
-  req,
-  res
-) {
-  const report =
-    await prisma.report.findUnique({
-      where: {
-        id: req.params.id,
-      },
+async function sharePreview(req, res) {
+  const report = await prisma.report.findUnique({
+    where: {
+      id: req.params.id,
+    },
 
-      include:
-        reportInclude,
-    });
+    include: reportInclude,
+  })
 
   if (!report) {
-    return res
-      .status(404)
-      .send(
-        'Reporte no encontrado'
-      );
+    return res.status(404).send("Reporte no encontrado")
   }
 
   const statusLabels = {
-    perdido:
-      'Perdido',
+    perdido: "Perdido",
 
-    encontrado:
-      'Encontrado',
+    encontrado: "Encontrado",
 
-    en_calle:
-      'En situación de calle',
+    en_calle: "En situación de calle",
 
-    ayudado:
-      'Ayudado',
+    ayudado: "Ayudado",
 
-    rescatado:
-      'Rescatado',
+    rescatado: "Rescatado",
 
-    en_adopcion:
-      'En adopción',
+    en_adopcion: "En adopción",
 
-    adoptado:
-      'Adoptado',
+    adoptado: "Adoptado",
 
-    maltrato: 
-      'Maltrato animal',
-  };
+    maltrato: "Maltrato animal",
+  }
 
-  const status =
-    statusLabels[
-      report.status
-    ] ||
-    report.status;
+  const status = statusLabels[report.status] || report.status
 
-  const reportUrl =
-    `https://www.patitastucuman.com.ar/reporte/${encodeURIComponent(
-      report.id
-    )}`;
+  const reportUrl = `https://www.patitastucuman.com.ar/reporte/${encodeURIComponent(
+    report.id,
+  )}`
 
   const image =
-    report.images?.[0]
-      ?.url ||
-    'https://www.patitastucuman.com.ar/og-image.png';
+    report.images?.[0]?.url || "https://www.patitastucuman.com.ar/og-image.png"
 
   // Para adopciones hacemos el título
   // un poco más natural.
   const title =
-    report.status ===
-    'en_adopcion'
+    report.status === "en_adopcion"
       ? `${report.name} busca una familia | Patitas Tucumán`
-      : report.status ===
-          'adoptado'
+      : report.status === "adoptado"
         ? `${report.name} fue adoptado | Patitas Tucumán`
-        : `${report.name} - ${status} en ${report.zone} | Patitas Tucumán`;
+        : `${report.name} - ${status} en ${report.zone} | Patitas Tucumán`
 
   const description =
     report.description ||
-    (
-      report.status ===
-      'en_adopcion'
-        ? `${report.name} está en adopción en ${report.zone}, Tucumán. Conocé su historia y ayudalo a encontrar una familia.`
-        : report.status ===
-            'adoptado'
-          ? `${report.name} encontró una familia en Tucumán.`
-          : `${report.name} fue reportado como ${status.toLowerCase()} en ${report.zone}, Tucumán. Ayudanos a difundir.`
-    );
+    (report.status === "en_adopcion"
+      ? `${report.name} está en adopción en ${report.zone}, Tucumán. Conocé su historia y ayudalo a encontrar una familia.`
+      : report.status === "adoptado"
+        ? `${report.name} encontró una familia en Tucumán.`
+        : `${report.name} fue reportado como ${status.toLowerCase()} en ${report.zone}, Tucumán. Ayudanos a difundir.`)
 
-  const safeTitle =
-    escapeHtml(title);
+  const safeTitle = escapeHtml(title)
 
-  const safeDescription =
-    escapeHtml(
-      description
-    );
+  const safeDescription = escapeHtml(description)
 
-  const safeImage =
-    escapeHtml(image);
+  const safeImage = escapeHtml(image)
 
-  const safeReportUrl =
-    escapeHtml(
-      reportUrl
-    );
+  const safeReportUrl = escapeHtml(reportUrl)
 
   const html = `<!DOCTYPE html>
 <html lang="es">
@@ -818,15 +646,9 @@ async function sharePreview(
   </p>
 
 </body>
-</html>`;
+</html>`
 
-  res
-    .status(200)
-    .set(
-      'Content-Type',
-      'text/html; charset=utf-8'
-    )
-    .send(html);
+  res.status(200).set("Content-Type", "text/html; charset=utf-8").send(html)
 }
 
 // ======================================================
@@ -842,4 +664,4 @@ module.exports = {
   myReports,
   sitemap,
   sharePreview,
-};
+}
