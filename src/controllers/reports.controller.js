@@ -59,7 +59,7 @@ const createReportSchema = z.object({
   phone: z.string().min(1, "El teléfono es obligatorio"),
 
   email: z.string().email("Email de contacto inválido"),
-
+  whatsappFollowupConsent: z.boolean().optional().default(false),
   mapLat: z.number().optional(),
 
   mapLng: z.number().optional(),
