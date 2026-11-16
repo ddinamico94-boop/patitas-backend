@@ -1,4 +1,4 @@
-require('dotenv').config();
+﻿require('dotenv').config();
 require('express-async-errors');
 
 const compression = require('compression');
@@ -15,6 +15,7 @@ const adminRoutes = require('./routes/admin.routes');
 const uploadsRoutes = require('./routes/uploads.routes');
 const conversationsRoutes = require('./routes/conversations.routes');
 const quirofanoRoutes = require('./routes/quirofano.routes');
+const whatsappFollowupRoutes = require('./routes/whatsappFollowup.routes');
 
 const errorHandler = require('./middleware/errorHandler');
 const { initSocket } = require('./lib/socket');
@@ -61,9 +62,10 @@ app.use('/api/uploads', uploadsRoutes);
 app.use('/api/conversations', conversationsRoutes);
 
 // ============================================================
-// QUIRÓFANO MÓVIL
+// QUIRÃ“FANO MÃ“VIL
 // ============================================================
 app.use('/api/quirofano', quirofanoRoutes);
+app.use('/api/internal/whatsapp-followup', whatsappFollowupRoutes);
 
 // ============================================================
 // HEALTH CHECK
@@ -97,6 +99,7 @@ const PORT = process.env.PORT || 4000;
 
 server.listen(PORT, () => {
   console.log(
-    `🐾 API de Patitas Tucumán corriendo en http://localhost:${PORT}`
+    `ðŸ¾ API de Patitas TucumÃ¡n corriendo en http://localhost:${PORT}`
   );
 });
+
